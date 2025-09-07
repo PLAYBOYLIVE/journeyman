@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Our Love Map 💕</title>
+  <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;700&family=Pacifico&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <style>
+    :root{
+      --bg1:#fff4fb; --bg2:#f7fcff; --ink:#2a2233; --pink:#ff7aa2; --rose:#ff4d88; --lav:#a38bff; --mint:#9be7d6;
+      --card:rgba(255,255,255,.82); --cardBorder:rgba(255,255,255,.5); --shadow: 0 12px 28px rgba(0,0,0,.18);
+      --glassBlur:10px; --accent: linear-gradient(135deg, var(--pink), var(--lav));
+      --overlay: rgba(0,0,0,.36);
+    }
+    [data-theme="dark"]{
+      --bg1:#1d2740; --bg2:#243251; --ink:#eef2ff;
+      --card:rgba(36,48,76,.78); --cardBorder:rgba(255,255,255,.16);
+      --shadow: 0 12px 30px rgba(0,0,0,.38); --overlay: rgba(0,0,0,.22);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { font-family: 'Quicksand', system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji'; color: var(--ink); overflow: hidden; }
+
+    #stage { position: absolute; inset: 0; overflow: hidden; }
+    #parallax { position:absolute; inset:0; perspective: 800px; z-index: 0; pointer-events:none; }
+    .layer { position:absolute; inset:-10%; filter: blur(10px); }
+    .l1 { background: radial-gradient(900px 600px at 15% -10%, var(--bg1), transparent 60%); transform: translateZ(-80px); }
+    .l2 { background: radial-gradient(1000px 700px at 110% 10%, var(--bg2), transparent 60%); transform: translateZ(-120px); opacity:.9; }
+    .l3 { background: radial-gradient(1200px 800px at 50% 120%, rgba(255,122,162,.18), transparent 70%); transform: translateZ(-200px); }
+
+    #particles { position:absolute; inset:0; z-index:1; pointer-events:none; }
+
+    #map { position: absolute; inset: 0; z-index: 2; }
+    #map.dark .leaflet-tile { filter: brightness(1.18) contrast(0.96) saturate(1.06); }
+    .leaflet-container { font: inherit; }
+
+    #focusMask {
+      position:absolute; inset:0; z-index:2; pointer-events:none; opacity:0; transition: opacity .35s ease; background: var(--overlay);
+      -webkit-mask: radial-gradient(160px 160px at var(--fx,50%) var(--fy,50%), transparent 0, transparent 55%, black 56%);
+              mask: radial-gradient(160px 160px at var(--fx,50%) var(--fy,50%), transparent 0, transparent 55%, black 56%);
+    }
+    #focusMask.show { opacity: 1; }
+
+    .header { position: absolute; z-index: 4; left: 16px; top: 16px; backdrop-filter: blur(var(--glassBlur)); background: var(--card);
+      border:1px solid var(--cardBorder); padding: 10px 12px; border-radius: 18px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 360px); }
+    .logo { font-family: 'Pacifico', cursive; font-size: 20px; background: var(--accent); -webkit-background-clip: text; background-clip:text; color: transparent; }
+    .tag { font-size: 12px; opacity: .8; }
+
+    .btn { border: 0; border-radius: 999px; padding: 8px 14px; cursor: pointer; background: var(--accent); color: white; font-weight: 700; box-shadow: var(--shadow);
+      transition: transform .06s ease, box-shadow .2s ease; will-change: transform; white-space: nowrap; }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:active { transform: translateY(1px) scale(.98); }
+    .btn.ghost { background: #fff; color: var(--rose); border: 2px solid var(--rose); }
+    .btn.icon { width: 36px; height: 36px; display:grid; place-items:center; padding:0; }
+    .btn.sm { padding: 6px 10px; font-size: 12px; }
+    .bouncy { animation: press .18s cubic-bezier(.2,.8,.2,1) both; }
+    @keyframes press { 0%{ transform: translateY(0) scale(1)} 50%{ transform: translateY(1px) scale(.98)} 100%{ transform: translateY(0) scale(1) } }
+
+    .panel { position: absolute; z-index: 4; right: 16px; top: 16px; width: 300px; max-height: calc(100% - 32px); overflow: auto;
+      backdrop-filter: blur(var(--glassBlur)); background: var(--card); border:1px solid var(--cardBorder); border-radius: 18px; box-shadow: var(--shadow);
+      padding: 10px; display: grid; grid-template-rows: auto 1fr auto auto; gap: 8px; }
+    .panel h3 { margin: 0; font-size: 15px; }
+    .panel-head { display:flex; align-items:center; justify-content:space-between; gap:8px; padding: 6px 6px; border-radius: 12px; background: rgba(255,255,255,.5); border:1px solid var(--cardBorder); }
+    [data-theme="dark"] .panel-head { background: rgba(0,0,0,.2); }
+    .panel.collapsed #spotList, .panel.collapsed .music, .panel.collapsed .tour-ctrl { display:none; }
+
+    .header, .panel { opacity: 0; transform: translateY(8px); transition: opacity .45s ease, transform .45s ease; pointer-events: none; }
+    body.ui-ready .header, body.ui-ready .panel { opacity: 1; transform: translateY(0); pointer-events: auto; }
+    body.ui-ready .header { transition-delay: 0s; }
+    body.ui-ready .panel  { transition-delay: .08s; }
+
+    #spotList { display: grid; gap: 6px; }
+    .spot { display:grid; grid-template-columns: 18px 1fr auto; align-items:center; gap:8px; padding: 6px 8px; border-radius: 10px; background: rgba(255,255,255,.7); border:1px solid var(--cardBorder); }
+    [data-theme="dark"] .spot { background: rgba(0,0,0,.25); }
+    .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--rose); box-shadow: 0 0 0 4px rgba(255,77,136,.12); }
+    .spot-title { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .spot:hover { outline:2px solid rgba(163,139,255,.4); cursor:pointer }
+
+    .leaflet-popup-content-wrapper { border-radius: 16px; box-shadow: var(--shadow); backdrop-filter: blur(var(--glassBlur)); background: var(--card); border:1px solid var(--cardBorder); }
+    .leaflet-popup-content { margin: 10px 12px; font-size: 14px; }
+    .popup-title { font-weight: 800; color: var(--rose); font-size: 16px; margin-bottom: 4px; }
+    .popup-note { line-height: 1.45; }
+    [data-theme="dark"] .popup-note { color:#fff; }
+    .popup-photo { width: 100%; border-radius: 12px; margin-top: 8px; box-shadow: 0 6px 14px rgba(0,0,0,.1); }
+
+    .heart-marker { width:36px; height:36px; transform-origin: 50% 80%; filter: drop-shadow(0 6px 14px rgba(0,0,0,.2)); }
+    .heart-marker svg { width:100%; height:100%; display:block; }
+    .heart-marker.pulse { animation: heartbeat 1.8s ease-in-out infinite; }
+    .heart-marker.highlight { filter: drop-shadow(0 0 14px rgba(255,77,136,.9)) drop-shadow(0 0 6px rgba(163,139,255,.7)); transform: scale(1.08); }
+    @keyframes heartbeat { 0%, 100%{ transform: scale(1)} 20%{ transform: scale(1.08)} 30%{ transform: scale(1)} 40%{ transform: scale(1.06)} 60%{ transform: scale(1)} }
+
+    .music { display:flex; align-items:center; gap:8px; font-size:12px; padding: 6px 8px; border-radius: 10px; background: rgba(255,255,255,.7); border:1px solid var(--cardBorder); }
+    [data-theme="dark"] .music { background: rgba(0,0,0,.25); }
+    .music-ind { width:8px; height:8px; border-radius:50%; background: #bbb; box-shadow: 0 0 0 6px rgba(255,122,162,.15); }
+    .music.playing .music-ind { background: var(--rose); box-shadow: 0 0 0 6px rgba(255,122,162,.3); }
+
+    .tour-ctrl { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:10px; background: rgba(255,255,255,.7); border:1px solid var(--cardBorder); }
+    [data-theme="dark"] .tour-ctrl { background: rgba(0,0,0,.25); }
+    .tour-ctrl label { font-size:12px; opacity:.8 }
+    .tour-ctrl input[type="range"] { width: 120px; }
+
+    .panel::-webkit-scrollbar{ width:10px }
+    .panel::-webkit-scrollbar-thumb{ background:#f1d9e3; border-radius:999px }
+
+    #postcardFrame { position:absolute; inset:0; z-index:3; pointer-events:none; display:none; }
+    #postcardFrame.show { display:block; }
+    .pc-inner { position:absolute; inset:40px; border: 10px solid rgba(255,255,255,.9); border-radius: 24px; box-shadow: inset 0 0 0 2px rgba(255,77,136,.5), 0 12px 40px rgba(0,0,0,.3); }
+    .pc-caption { position:absolute; left:50%; transform: translateX(-50%); bottom: 18px; padding:6px 12px; border-radius: 999px; font-weight:700; color:#fff; background: var(--accent); box-shadow: var(--shadow); }
+
+    #welcome { position: fixed; inset: 0; display: grid; place-items: center; z-index: 9999; opacity: 1; transition: opacity .6s ease; background: var(--bg2); }
+    #welcome.open { background: transparent; }
+    #welcome.hide { opacity: 0; pointer-events: none; }
+    .curtain { position: absolute; top: 0; width: 50vw; height: 100vh; z-index: 0; transform: translateX(0); transition: transform .7s ease;
+      background: linear-gradient(to right, rgba(0,0,0,.06), rgba(0,0,0,0) 30%), radial-gradient(1200px 800px at 50% -10%, var(--bg1), var(--bg2)); }
+    #curtainLeft { left: 0; border-right: 1px solid rgba(0,0,0,.06); }
+    #curtainRight { right: 0; transform: scaleX(-1); border-left: 1px solid rgba(0,0,0,.06); }
+    #welcome.open #curtainLeft { transform: translateX(-101%); }
+    #welcome.open #curtainRight { transform: scaleX(-1) translateX(-101%); }
+    .wcard { position: relative; z-index: 1; width: min(560px, 92vw); background: var(--card); border: 1px solid var(--cardBorder); border-radius: 24px; box-shadow: var(--shadow); padding: 22px 22px 18px; text-align: center; transition: transform .5s ease, opacity .5s ease; }
+    #welcome.open .wcard { opacity: 0; transform: translateY(-8px) scale(.98); }
+    .wtitle { font-family: 'Pacifico', cursive; font-size: 28px; background: var(--accent); -webkit-background-clip: text; background-clip: text; color: transparent; margin: 2px 0 6px; }
+    .wmsg { font-size: 16px; line-height: 1.55; margin: 6px 0 12px; font-style: italic; }
+    .wsig { font-weight: 700; opacity: .85; margin-bottom: 14px; }
+    .wbtn { margin-top: 6px; }
+
+    .panel.as-sheet { position: fixed; left: 8px; right: 8px; bottom: 8px; top: auto; width: auto; max-height: 50vh; z-index: 6; border-radius: 16px; }
+    .panel.as-sheet.collapsed { max-height: 44px; overflow: hidden; padding: 8px; }
+    .panel.as-sheet .panel-head { background: transparent; border: none; padding: 0 6px }
+    .panel.as-sheet #spotList { overflow: auto }
+    body.sheet .header { left: 8px; right: 8px; max-width: none; }
+    body.sheet .header .tag { display: none }
+
+    @media (max-width: 820px) {
+      .header { left: 8px; right: 8px; width: auto; gap: 8px }
+      .header .tag { display: none }
+    }
+
+    @media print {
+      body { background: #fff; overflow: visible; }
+      .header, .panel { display:none !important; }
+      #stage { position: relative; width: 148mm; height: 105mm; margin: 0 auto; }
+      #postcardFrame { display:block; }
+      #welcome { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="logo">Our Love Map</div>
+      <div class="tag">places that made us, us ✨</div>
+    </div>
+    <button id="fitBtn" class="btn" title="Zoom to all hearts">Fit hearts</button>
+    <button id="tourBtn" class="btn" title="Auto tour through all spots">Start tour</button>
+    <button id="postcardBtn" class="btn" title="Export postcard (PNG/Print)">Postcard</button>
+    <button id="themeBtn" class="btn ghost" title="Toggle dark / light">Dark mode</button>
+    <button id="aboutBtn" class="btn ghost" title="How it works">About</button>
+  </div>
+
+  <aside class="panel" id="listPanel">
+    <div class="panel-head">
+      <h3>Our Spots 💘</h3>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button id="collapseBtn" class="btn icon" title="Minimize/expand">▾</button>
+      </div>
+    </div>
+    <div id="spotList"></div>
+    <div class="tour-ctrl">
+      <label for="speedRange">Tour speed</label>
+      <input id="speedRange" type="range" min="1200" max="8000" step="200" value="3500" />
+      <span id="speedLabel" style="font-size:12px; opacity:.7">3.5s</span>
+      <button id="randomBtn" class="btn sm" title="Jump to a random spot">Random</button>
+    </div>
+    <div class="music" id="musicPill">
+      <div class="music-ind"></div>
+      <span id="musicTxt">music off</span>
+      <button id="musicBtn" class="btn sm" style="margin-left:auto;">Toggle</button>
+    </div>
+  </aside>
+
+  <div id="stage">
+    <div id="parallax">
+      <div class="layer l1"></div>
+      <div class="layer l2"></div>
+      <div class="layer l3"></div>
+    </div>
+    <canvas id="particles"></canvas>
+    <div id="map"></div>
+    <div id="focusMask"></div>
+    <div id="postcardFrame">
+      <div class="pc-inner"></div>
+      <div class="pc-caption" id="pcCaption">Our Love Map</div>
+    </div>
+  </div>
+
+  <div id="floaters" style="position:absolute; inset:0; z-index:5; pointer-events:none;"></div>
+
+  <div id="welcome">
+    <div id="curtainLeft" class="curtain"></div>
+    <div id="curtainRight" class="curtain"></div>
+    <div class="wcard">
+      <div class="wtitle">Welcome to a Journey of Us!</div>
+      <div class="wmsg" id="welcomeMsg"></div>
+      <div class="wsig">— Love, Ron :)</div>
+      <button id="enterBtn" class="btn wbtn">Enter</button>
+    </div>
+  </div>
+
+  <audio id="bgm" loop preload="metadata">
+    <source src="song.mp3" type="audio/mpeg">
+    Your browser doesn’t support audio.
+  </audio>
+
+  <script>
+    const MAP_CENTER = [43.668019, -79.507522];
+    const MAP_ZOOM = 10;
+
+    const PLACES = [
+      { lat:43.637227, lng:-79.460847, title:"Where We Made it Official 💕", note:"A moment when even the rain couldn't take away from our love.", photo:"" },
+      { lat:43.259991, lng:-79.922400, title:"Our First Encounter 🎃", note:"FMSA Halo-Halloween 2021 - where our paths crossed for the first time.", photo:"" },
+      { lat:43.238265, lng:-79.958105, title:"The Magic of Tiffany Falls", note:"Even an evil snow storm couldn't cloud the magical moment of our kiss here.", photo:"" },
+      { lat:44.503190, lng:-80.311960, title:"First Weekend Getaway!", note:"A fun time exploring the caves of Blue Mountain!", photo:""},
+      { lat:49.244870, lng:-123.032340, title:"First Trip With Friends!", note:"F boulders we climb mountains. A trip that sparked our desire to explore the world.", photo:""},
+      { lat:43.844860, lng:-79.019090, title:"The Popeyes That Saw Us Fall in Love", note:"The best food for a chill Beta Squad and Brawlstars night :)", photo:""},
+      { lat:43.254270, lng:-79.866310, title:"The Sushi That Started it All", note:"The sushi that knocked Liz out cold, and made Ron worry sick that he got ghosted LOL", photo:""},
+      { lat:43.842390, lng:-79.027910, title:"SWEET TREAT!", note:"Where every devious sweet treat craving lead us :)", photo:""},
+      { lat:44.928340, lng:-79.027910, title:"Our First Cottage Trip!", note:"We celebrated Zig's birthday in one of my favorite weekends of all time. Everything about it was magical.", photo:""},
+      { lat:43.820820, lng:-78.724060, title:"First Ajax Meetup", note:"I remember being SO nervous driving us around Rotary Park and walking with you. All I could think about was how amazing you are and how I hoped you like me as much as I like you.", photo:""},
+      { lat:43.957110, lng:-78.162040, title:"Cobourg Beach Day", note:"This was a beautiful day. All we did was relax in the sun, listen to music, and enjoy each other's presence. I love how still moments like these always give me a moment to pause and appreciate you and the love we share", photo:""}
+    ];
+
+    const map = L.map('map', { zoomControl: false });
+    const lightTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' });
+    const darkTiles = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; OpenStreetMap, &copy; CARTO', subdomains: 'abcd' });
+    function swapTiles(dark){
+      if(dark){
+        if(map.hasLayer(lightTiles)) map.removeLayer(lightTiles);
+        if(!map.hasLayer(darkTiles)) map.addLayer(darkTiles);
+        document.getElementById('map').classList.add('dark');
+      } else {
+        if(map.hasLayer(darkTiles)) map.removeLayer(darkTiles);
+        if(!map.hasLayer(lightTiles)) map.addLayer(lightTiles);
+        document.getElementById('map').classList.remove('dark');
+      }
+    }
+    let zoomCtl = L.control.zoom({ position: 'bottomright' });
+    zoomCtl.addTo(map);
+    map.setView(MAP_CENTER, MAP_ZOOM);
+
+    const body = document.body;
+    const themeBtn = document.getElementById('themeBtn');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+    const applyTheme = (dark) => { body.dataset.theme = dark ? 'dark' : ''; swapTiles(dark); themeBtn.textContent = dark ? 'Light mode' : 'Dark mode'; };
+    applyTheme(prefersDark.matches);
+    prefersDark.addEventListener('change', e => applyTheme(e.matches));
+    themeBtn.addEventListener('click', () => applyTheme(!(body.dataset.theme === 'dark')));
+
+    const markers = [];
+    const bounds = [];
+
+    const markerHTML = `
+      <div class="heart-marker pulse" aria-hidden="true">
+        <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#ff7aa2"/>
+              <stop offset="100%" stop-color="#a38bff"/>
+            </linearGradient>
+          </defs>
+          <path d="M32 56s-4.6-3.86-11.7-10.4C10.6 36.9 4 31 4 22.9 4 16 9.4 10 16.6 10 21.5 10 25 12.8 27 15.9 29 12.8 32.5 10 37.4 10 44.6 10 50 16 50 22.9c0 8.1-6.6 14-16.3 22.7C36.6 52.1 32 56 32 56z" fill="url(#g)" stroke="#ff4d88" stroke-width="2"/>
+        </svg>
+      </div>`;
+
+    function makePopupHTML(p){
+      const img = p.photo ? `<img class="popup-photo" src="${p.photo}" alt="${p.title}">` : '';
+      return `<div class="popup"><div class="popup-title">${p.title}</div><div class="popup-note">${p.note}</div>${img}</div>`;
+    }
+
+    function spawnFloatHeart(x, y){
+      const el = document.createElement('div');
+      el.className = 'float-heart';
+      el.textContent = '❤';
+      el.style.position='absolute';
+      el.style.left = x + 'px';
+      el.style.top  = y + 'px';
+      el.style.fontSize = (12 + Math.random()*12) + 'px';
+      el.style.opacity = 0;
+      el.style.transition = 'opacity .9s, transform 1.2s';
+      document.getElementById('floaters').appendChild(el);
+      const dx = (Math.random()*2-1) * 30;
+      const dy = -50 - Math.random()*40;
+      const rot = (Math.random()*60-30);
+      requestAnimationFrame(() => { el.style.opacity = 1; el.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg)`; });
+      setTimeout(() => el.remove(), 1400);
+    }
+
+    const focusMask = document.getElementById('focusMask');
+    let focusFadeTimer = null;
+    function setFocusAtLatLng(lat, lng, show=true){
+      const pt = map.latLngToContainerPoint([lat,lng]);
+      focusMask.style.setProperty('--fx', pt.x + 'px');
+      focusMask.style.setProperty('--fy', pt.y + 'px');
+      if (show){
+        focusMask.classList.add('show');
+        if (focusFadeTimer) clearTimeout(focusFadeTimer);
+        focusFadeTimer = setTimeout(()=> focusMask.classList.remove('show'), 1000);
+      }
+    }
+
+    PLACES.forEach((p, idx) => {
+      const icon = L.divIcon({ className: '', html: markerHTML, iconSize: [36,36], iconAnchor:[18,30], popupAnchor:[0,-26] });
+      const m = L.marker([p.lat, p.lng], { icon }).addTo(map);
+      m.bindPopup(makePopupHTML(p));
+      m.on('click', (ev) => {
+        const el = ev.target.getElement();
+        if(el){ el.classList.add('bouncy'); setTimeout(()=>el.classList.remove('bouncy'), 250); }
+        const pt = ev.originalEvent ? {x: ev.originalEvent.clientX, y: ev.originalEvent.clientY} : {x: window.innerWidth/2, y: window.innerHeight/2};
+        spawnFloatHeart(pt.x, pt.y);
+      });
+      m.on('popupopen', () => {
+        setFocusAtLatLng(p.lat, p.lng, true);
+        for(let i=0;i<6;i++){
+          const c = map.latLngToContainerPoint([p.lat,p.lng]);
+          spawnFloatHeart(c.x + (Math.random()*32-16), c.y + (Math.random()*16-8));
+        }
+      });
+      m.on('popupclose', () => focusMask.classList.remove('show'));
+      markers.push(m);
+      bounds.push([p.lat, p.lng]);
+    });
+
+    const fitBtn = document.getElementById('fitBtn');
+    fitBtn.addEventListener('click', () => { if(bounds.length){ map.fitBounds(bounds, { padding: [60,60] }); } });
+
+    const list = document.getElementById('spotList');
+    PLACES.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.className = 'spot';
+      row.innerHTML = `<div class='dot' aria-hidden='true'></div><div class='spot-title' title='${p.title}'>${p.title}</div><button class='btn sm'>Go</button>`;
+      const focus = () => {
+        stopTour();
+        map.flyTo([p.lat, p.lng], 15, { animate: true, duration: 0.8 });
+        map.once('moveend', () => { markers[i].openPopup(); });
+      };
+      row.addEventListener('mouseenter', () => {
+        const el = markers[i].getElement();
+        if(el){ el.classList.add('highlight'); }
+      });
+      row.addEventListener('mouseleave', () => {
+        const el = markers[i].getElement();
+        if(el){ el.classList.remove('highlight'); }
+      });
+      row.addEventListener('click', (e) => { e.preventDefault(); focus(); });
+      list.appendChild(row);
+    });
+
+    document.getElementById('aboutBtn').addEventListener('click', () => {
+      alert('Click hearts to read memories. Use the list to jump. "Postcard" saves/prints a snapshot. Toggle dark mode for a mood change. 💝');
+    });
+
+    const panel = document.getElementById('listPanel');
+    const collapseBtn = document.getElementById('collapseBtn');
+
+    function updateCollapseIcon(){
+      const isSheet = panel.classList.contains('as-sheet');
+      const isColl = panel.classList.contains('collapsed');
+      collapseBtn.textContent = isSheet ? (isColl ? '▲' : '▾') : (isColl ? '▸' : '▾');
+    }
+
+    collapseBtn.addEventListener('click', () => {
+      panel.classList.toggle('collapsed');
+      updateCollapseIcon();
+    });
+
+    const panelHead = document.querySelector('.panel-head');
+    panelHead.addEventListener('click', (e)=>{
+      if (e.target === collapseBtn) return;
+      panel.classList.toggle('collapsed');
+      updateCollapseIcon();
+    });
+
+    function setZoomPos(mobile){
+      map.removeControl(zoomCtl);
+      zoomCtl = L.control.zoom({ position: mobile ? 'topleft' : 'bottomright' });
+      zoomCtl.addTo(map);
+    }
+
+    function applyResponsiveLayout(){
+      const header = document.querySelector('.header');
+      const w = window.innerWidth;
+      const desiredPanelW = 300 + 32;
+      const headerW = header.offsetWidth + 24;
+      const forceSheet = (w < 880) || (w < headerW + desiredPanelW);
+      panel.classList.toggle('as-sheet', forceSheet);
+      document.body.classList.toggle('sheet', forceSheet);
+      if (forceSheet) panel.classList.add('collapsed');
+      setZoomPos(forceSheet);
+      updateCollapseIcon();
+    }
+    window.addEventListener('resize', applyResponsiveLayout);
+    window.addEventListener('orientationchange', applyResponsiveLayout);
+    applyResponsiveLayout();
+
+    const bgm = document.getElementById('bgm');
+    const musicBtn = document.getElementById('musicBtn');
+    const musicPill = document.getElementById('musicPill');
+    const musicTxt = document.getElementById('musicTxt');
+    musicBtn.addEventListener('click', async (e) => {
+      e.currentTarget.classList.add('bouncy'); setTimeout(()=>e.currentTarget.classList.remove('bouncy'), 200);
+      try {
+        if (bgm.paused) {
+          bgm.load(); await bgm.play();
+          musicPill.classList.add('playing'); musicTxt.textContent = 'music on';
+        } else {
+          bgm.pause();
+          musicPill.classList.remove('playing'); musicTxt.textContent = 'music off';
+        }
+      } catch (e) {
+        alert('Could not play. Ensure song.mp3 is beside this HTML, then tap again.');
+      }
+    });
+
+    const tourBtn = document.getElementById('tourBtn');
+    const speedRange = document.getElementById('speedRange');
+    const speedLabel = document.getElementById('speedLabel');
+    let tourActive = false;
+    let tourTimer = null;
+    let tourIndex = 0;
+    let tourDelay = +speedRange.value;
+
+    function playNext(){
+      if (!tourActive) return;
+      const i = tourIndex % PLACES.length;
+      tourIndex++;
+      const p = PLACES[i];
+      map.flyTo([p.lat, p.lng], 15, { animate: true, duration: Math.min(1, tourDelay/2000) });
+      map.once('moveend', () => { markers[i].openPopup(); });
+      tourTimer = setTimeout(playNext, tourDelay);
+    }
+    function startTour(){
+      if (tourActive) return;
+      tourActive = true;
+      tourBtn.textContent = 'Stop tour';
+      playNext();
+    }
+    function stopTour(){
+      if (!tourActive) return;
+      tourActive = false;
+      tourBtn.textContent = 'Start tour';
+      if (tourTimer) { clearTimeout(tourTimer); tourTimer = null; }
+    }
+    tourBtn.addEventListener('click', () => { (tourActive ? stopTour() : startTour()); tourBtn.classList.add('bouncy'); setTimeout(()=>tourBtn.classList.remove('bouncy'), 180); });
+    document.getElementById('map').addEventListener('mousedown', stopTour);
+    list.addEventListener('click', stopTour, { capture: true });
+    speedRange.addEventListener('input', () => {
+      tourDelay = +speedRange.value;
+      speedLabel.textContent = (tourDelay/1000).toFixed(1) + 's';
+      if(tourActive){ stopTour(); startTour(); }
+    });
+
+    document.getElementById('randomBtn').addEventListener('click', () => {
+      stopTour();
+      tourIndex = Math.floor(Math.random()*PLACES.length);
+      const p = PLACES[tourIndex];
+      map.flyTo([p.lat, p.lng], 15, { animate: true, duration: 0.8 });
+      map.once('moveend', () => { markers[tourIndex].openPopup(); });
+    });
+
+    window.addEventListener('keydown', (e)=>{
+      if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (e.code === 'Space'){ e.preventDefault(); tourActive ? stopTour() : startTour(); }
+      if (e.key === 'Escape'){ stopTour(); }
+      if (e.key === 'ArrowRight'){
+        stopTour(); tourIndex++;
+        const i = tourIndex % PLACES.length; const p = PLACES[i];
+        map.flyTo([p.lat,p.lng],15,{animate:true,duration:.8});
+        map.once('moveend', ()=>markers[i].openPopup());
+      }
+      if (e.key === 'ArrowLeft'){
+        stopTour(); tourIndex = (tourIndex - 1 + PLACES.length) % PLACES.length;
+        const p = PLACES[tourIndex];
+        map.flyTo([p.lat,p.lng],15,{animate:true,duration:.8});
+        map.once('moveend', ()=>markers[tourIndex].openPopup());
+      }
+    });
+
+    const par = document.getElementById('parallax');
+    window.addEventListener('mousemove', (e)=>{
+      const x = (e.clientX / window.innerWidth - .5) * 8;
+      const y = (e.clientY / window.innerHeight - .5) * -8;
+      par.style.transform = `rotateY(${x}deg) rotateX(${y}deg)`;
+    });
+
+    const pCanvas = document.getElementById('particles');
+    const ctx = pCanvas.getContext('2d');
+    let W, H, parts = [];
+    function resize(){ W = pCanvas.width = window.innerWidth; H = pCanvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize); resize();
+    function initParticles(n=70){
+      parts = Array.from({length:n}, ()=>({ x: Math.random()*W, y: Math.random()*H, r: 1+Math.random()*2, vx: (Math.random()*0.4-0.2), vy: (Math.random()*0.4-0.2) }));
+    }
+    function tick(){
+      ctx.clearRect(0,0,W,H);
+      const color = getComputedStyle(document.body).getPropertyValue('--rose').trim() || '#ff4d88';
+      ctx.fillStyle = color;
+      ctx.globalAlpha = 0.35;
+      for(const p of parts){
+        p.x += p.vx; p.y += p.vy;
+        if(p.x< -10) p.x=W+10; if(p.x>W+10) p.x=-10;
+        if(p.y<-10) p.y=H+10; if(p.y>H+10) p.y=-10;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+      }
+      requestAnimationFrame(tick);
+    }
+    initParticles(); tick();
+
+    const postcardBtn = document.getElementById('postcardBtn');
+    const stage = document.getElementById('stage');
+    const frame = document.getElementById('postcardFrame');
+    const pcCaption = document.getElementById('pcCaption');
+    function withPostcardFrame(run){
+      frame.classList.add('show');
+      pcCaption.textContent = new Date().toLocaleDateString() + ' — Our Love Map';
+      return Promise.resolve().then(run).finally(()=>{ frame.classList.remove('show'); });
+    }
+    async function savePNG(){
+      await withPostcardFrame(async ()=>{
+        const canvas = await html2canvas(stage, { useCORS: true, scale: 2, backgroundColor: null, windowWidth: document.documentElement.clientWidth, windowHeight: document.documentElement.clientHeight });
+        const data = canvas.toDataURL('image/png');
+        const a = document.createElement('a'); a.href = data; a.download = 'love-map-postcard.png'; a.click();
+      });
+    }
+    function printPostcard(){ withPostcardFrame(()=> window.print()); }
+
+    function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+    function onceAsync(target, event, timeout=4000){
+      return new Promise(resolve=>{
+        let done=false;
+        const h=()=>{ if(done) return; done=true; clearTimeout(t); resolve(); };
+        const t=setTimeout(h, timeout);
+        target.once(event, h);
+      });
+    }
+    async function fitToAllAndSettle(padding=[60,60]){
+      await new Promise(res=>{ map.once('moveend', res); map.fitBounds(bounds, { padding }); });
+      const tiles = map.hasLayer(darkTiles) ? darkTiles : lightTiles;
+      await onceAsync(tiles, 'load', 6000);
+      await sleep(150);
+    }
+    async function exportPostcardFit(){
+      const prevCenter = map.getCenter();
+      const prevZoom = map.getZoom();
+      map.closePopup();
+      await fitToAllAndSettle([60,60]);
+      try { await savePNG(); } catch(e){ printPostcard(); }
+      finally { map.setView(prevCenter, prevZoom, { animate:false }); }
+    }
+    document.getElementById('postcardBtn').addEventListener('click', async ()=>{ await exportPostcardFit(); });
+
+    const WELCOME_MESSAGE = "Here’s to every little detour, every big laugh, and all the in-betweens that turned two hearts into one story.";
+    const welcome = document.getElementById('welcome');
+    const welcomeMsg = document.getElementById('welcomeMsg');
+    const enterBtn = document.getElementById('enterBtn');
+    welcomeMsg.textContent = WELCOME_MESSAGE;
+    function openCurtains(){
+      if (welcome.classList.contains('hide')) return;
+      welcome.classList.add('open');
+      setTimeout(()=> welcome.classList.add('hide'), 700);
+      setTimeout(()=> document.body.classList.add('ui-ready'), 1000);
+    }
+    enterBtn.addEventListener('click', openCurtains);
+    window.addEventListener('keydown', e => { if (e.key === 'Enter') openCurtains(); });
+  </script>
+</body>
+</html>
